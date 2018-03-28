@@ -1,8 +1,10 @@
 package com.group18.app.calendar;
 
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
@@ -24,6 +26,13 @@ import android.view.MenuItem;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Button;
 import android.widget.Toast;
+
+import com.group18.app.calendar.database.CommitmentHelper;
+import com.group18.app.calendar.database.CommitmentSchema;
+
+import java.io.File;
+import java.text.Format;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 
 //this is the Activity that is launched when app is started, see manifest file
@@ -39,6 +48,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final int AddClassCode = 0; //code used to identify result information coming from AddClassActivity
     private Context mContext;
     private SQLiteDatabase mDatabase;
+    CommitmentHelper mDbHelper;
 
 
     @Override
@@ -65,6 +75,52 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(this,myDrawerLayout,mytoolbar,R.string.open_drawer,R.string.close_drawer);
         myDrawerLayout.addDrawerListener(toggle);
         toggle.syncState();
+
+        File dbtest = new File("/data/data/com.group18.app.calendar/databases/commitments");
+        Context ctx = MainActivity.this; // for Activity, or Service. Otherwise simply get the context.
+        String dbname = "commitments.db";
+        File dbpath = ctx.getDatabasePath(dbname);
+        if(dbpath.exists()) {
+            SQLiteDatabase db = mDbHelper.getReadableDatabase();
+
+            String[] projections = {CommitmentSchema.CommitmentTable.Cols.PROFESSOR,
+                    CommitmentSchema.CommitmentTable.Cols.CNAME,
+                    CommitmentSchema.CommitmentTable.Cols.ID,
+                    CommitmentSchema.CommitmentTable.Cols.ONTHESEDAYS,
+                    CommitmentSchema.CommitmentTable.Cols.START,
+                    CommitmentSchema.CommitmentTable.Cols.END
+            };
+            Cursor cursor = db.query(CommitmentSchema.CommitmentTable.NAME, projections,
+                    null, null, null, null, null);
+
+
+            while (cursor.moveToNext()) {
+                String professor = cursor.getString(cursor.getColumnIndexOrThrow(CommitmentSchema.CommitmentTable.Cols.PROFESSOR));
+                String cname = cursor.getString(
+                        cursor.getColumnIndexOrThrow(CommitmentSchema.CommitmentTable.Cols.CNAME));
+//            String id = cursor.getString(
+//                    cursor.getColumnIndexOrThrow(CommitmentSchema.CommitmentTable.Cols.ID));
+                String days = cursor.getString(
+                        cursor.getColumnIndexOrThrow(CommitmentSchema.CommitmentTable.Cols.ONTHESEDAYS));
+                //gotta check if i need to convert date to string
+//            String start = cursor.getString(cursor.getColumnIndexOrThrow(CommitmentSchema.CommitmentTable.Cols.START));
+//
+//            String end = cursor.getString(cursor.getColumnIndexOrThrow(CommitmentSchema.CommitmentTable.Cols.END));
+
+                Commitments obj1 = new Commitments(professor, cname, days);
+                //we need 2 constructors one that takes in arguments to reconstruct the object and
+                //one that just generates the random id by itself
+                // also constructor doesnt have start and end string days being instantiated
+                myCommits.add(obj1);
+            }
+//            Context context = getApplicationContext();
+//            CharSequence text = "Hello toast!";
+//            int duration = Toast.LENGTH_SHORT;
+//
+//            Toast toast = Toast.makeText(context, text, duration);
+//            toast.show();
+            cursor.close();
+        }
 
         //startaddClass will start AddClassActivity for result
         startaddClass = findViewById(R.id.start_add_class);
@@ -189,6 +245,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         //Commitments com1 = new Commitments("Fox", "Soft Eng", "MWF");
         //myCommits.add(com1);
         commitmentsAdapter cCommitmentsAdapter = new commitmentsAdapter(getApplicationContext(), myCommits);
+        mDbHelper = new CommitmentHelper(MainActivity.this);
+        mDatabase = mDbHelper.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        for(int i = 0; i<myCommits.size(); ++i){
+            Commitments obj1 = myCommits.get(i);
+            Format formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            String start = formatter.format(obj1.getStart());
+            String end = formatter.format(obj1.getEnd());
+            String suuid = obj1.getProfessor().toString();
+
+
+            values.put(CommitmentSchema.CommitmentTable.Cols.PROFESSOR, obj1.getProfessor());
+            values.put(CommitmentSchema.CommitmentTable.Cols.CNAME, obj1.getCname());
+            values.put(CommitmentSchema.CommitmentTable.Cols.ID, suuid);
+            values.put(CommitmentSchema.CommitmentTable.Cols.ONTHESEDAYS, obj1.getOnTheseDays());
+            values.put(CommitmentSchema.CommitmentTable.Cols.START, start);
+            values.put(CommitmentSchema.CommitmentTable.Cols.END, end);
+            mDatabase.insert(CommitmentSchema.CommitmentTable.NAME, null, values);
+
+
+        }
         recyclerView.setAdapter(cCommitmentsAdapter);
     }
 }
